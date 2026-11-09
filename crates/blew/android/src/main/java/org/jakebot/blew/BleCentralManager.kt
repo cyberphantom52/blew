@@ -289,6 +289,8 @@ object BleCentralManager {
             ScanSettings
                 .Builder()
                 .setScanMode(scanMode)
+                .setLegacy(false)
+                .setPhy(ScanSettings.PHY_LE_ALL_SUPPORTED)
                 .build()
 
         scanCallback =
