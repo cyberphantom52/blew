@@ -92,6 +92,9 @@ async fn connect_inner(handle: Arc<CentralInner>, device_id: DeviceId) -> BlewRe
 
 /// Drop BlueZ's cached records for devices this scan has no business keeping.
 ///
+/// How often a device that keeps advertising the same data is reported again.
+const SIGHTING_INTERVAL: std::time::Duration = std::time::Duration::from_secs(5);
+
 /// BlueZ replays its device cache as `DeviceAdded` events at the start of every
 /// discovery session, using stale names and UUIDs from previous sessions.
 /// Dropping the cached record makes BlueZ treat the device as new and emit
@@ -169,6 +172,7 @@ async fn run_discovery_loop(
     handle: Arc<CentralInner>,
     discovery: impl Stream<Item = AdapterEvent> + Send,
 ) {
+    let mut sightings = std::collections::HashMap::new();
     let mut discovery = Box::pin(discovery);
     let mut watched_advertisements: StreamMap<
         bluer::Address,
@@ -225,8 +229,20 @@ async fn run_discovery_loop(
                 let Some(known) = discovered.get_mut(&device_id) else {
                     continue;
                 };
-                if !apply_advertised_property(known, property) {
+                // BlueZ keeps one object for a known device, so a peer that keeps sending the
+                // same advertisement is never added again. RSSI updates are the only sign
+                // it's still there, so report it again every so often.
+                let sighting = matches!(property, DeviceProperty::Rssi(_));
+                let changed = apply_advertised_property(known, property);
+                let due = sighting
+                    && sightings
+                        .get(&device_id)
+                        .is_none_or(|last: &std::time::Instant| last.elapsed() >= SIGHTING_INTERVAL);
+                if !changed && !due {
                     continue;
+                }
+                if sighting {
+                    sightings.insert(device_id.clone(), std::time::Instant::now());
                 }
                 let device = known.clone();
                 drop(discovered);
