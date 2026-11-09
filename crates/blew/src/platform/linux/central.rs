@@ -70,7 +70,7 @@ async fn connect_inner(handle: Arc<CentralInner>, device_id: DeviceId) -> BlewRe
             });
         }
         Err(_) => {
-            let _ = device.disconnect().await;
+            let _ = le_disconnect(&device).await;
             let _ = handle.event_tx.send(CentralEvent::DeviceDisconnected {
                 device_id: device_id.clone(),
                 cause: DisconnectCause::Timeout,
@@ -601,7 +601,7 @@ impl CentralBackend for LinuxCentral {
             // Stop the watcher first so link-down from our own disconnect is
             // reported as LocalClose rather than racing it as LinkLoss.
             handle.abort_connection_watcher(&device_id);
-            device.disconnect().await.map_err(|e| BlewError::Central {
+            le_disconnect(&device).await.map_err(|e| BlewError::Central {
                 source: Box::new(e),
             })?;
             debug!(device_id = %device_id, "device disconnected");
@@ -996,4 +996,22 @@ mod tests {
         ));
         assert_eq!(device.rssi, Some(-70));
     }
+}
+
+/// A device with both classic and LE connections is one BlueZ device, and
+/// `Device1.Disconnect` closes all of it, which would drop a phone's hands-free link.
+/// BlueZ's LE-only `Bearer.LE1.Disconnect` is still experimental, so for a phone the LE link
+/// is left for the other side to close.
+async fn le_disconnect(device: &bluer::Device) -> bluer::Result<()> {
+    const HANDS_FREE_GATEWAY: bluer::Uuid =
+        bluer::Uuid::from_u128(0x0000111f_0000_1000_8000_00805f9b34fb);
+    let is_phone = device
+        .uuids()
+        .await?
+        .is_some_and(|uuids| uuids.contains(&HANDS_FREE_GATEWAY));
+    if is_phone {
+        debug!("leaving the LE link open: this device also carries calls");
+        return Ok(());
+    }
+    device.disconnect().await
 }
