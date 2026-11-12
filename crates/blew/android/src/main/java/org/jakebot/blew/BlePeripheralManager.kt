@@ -569,12 +569,19 @@ object BlePeripheralManager {
     fun startAdvertising(
         name: String?,
         serviceUuids: Array<String>,
+        serviceDataUuids: Array<String>,
+        serviceDataHex: Array<String>,
         requestId: Int,
-    ): Int = synchronized(advertiseLock) { startAdvertisingLocked(name, serviceUuids, requestId) }
+    ): Int =
+        synchronized(advertiseLock) {
+            startAdvertisingLocked(name, serviceUuids, serviceDataUuids, serviceDataHex, requestId)
+        }
 
     private fun startAdvertisingLocked(
         name: String?,
         serviceUuids: Array<String>,
+        serviceDataUuids: Array<String>,
+        serviceDataHex: Array<String>,
         requestId: Int,
     ): Int {
         // Android can only stop an advertisement by handing back the exact
@@ -613,13 +620,18 @@ object BlePeripheralManager {
         }
         val data = dataBuilder.build()
 
-        // Scan response can carry the device name.
+        // The scan response carries the device name and any service data;
+        // with a 128-bit service UUID the advertisement itself has no room.
         val scanResponse =
-            name?.let {
-                AdvertiseData
-                    .Builder()
-                    .setIncludeDeviceName(true)
-                    .build()
+            if (name == null && serviceDataUuids.isEmpty()) {
+                null
+            } else {
+                val builder = AdvertiseData.Builder().setIncludeDeviceName(name != null)
+                for (i in serviceDataUuids.indices) {
+                    val bytes = serviceDataHex[i].chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+                    builder.addServiceData(ParcelUuid(UUID.fromString(serviceDataUuids[i])), bytes)
+                }
+                builder.build()
             }
 
         advertiseCallback =

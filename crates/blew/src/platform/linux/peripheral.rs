@@ -632,16 +632,21 @@ impl PeripheralBackend for LinuxPeripheral {
             // that BLE 5 centrals can connect at 2M PHY from the start.
             // Fall back to legacy advertising when the hardware or kernel
             // doesn't support extended advertising (BLE 4.x adapters).
-            let make_adv = |secondary_channel| Advertisement {
+            let make_adv = |secondary_channel, with_service_data: bool| Advertisement {
                 advertisement_type: AdvType::Peripheral,
                 local_name: config.local_name.name().map(str::to_owned),
                 service_uuids: config.service_uuids.clone().into_iter().collect(),
+                service_data: if with_service_data {
+                    config.service_data.iter().cloned().collect()
+                } else {
+                    Default::default()
+                },
                 secondary_channel,
                 ..Default::default()
             };
             let adv_handle = match handle
                 .adapter
-                .advertise(make_adv(Some(SecondaryChannel::TwoM)))
+                .advertise(make_adv(Some(SecondaryChannel::TwoM), true))
                 .await
             {
                 Ok(h) => {
@@ -650,13 +655,31 @@ impl PeripheralBackend for LinuxPeripheral {
                 }
                 Err(e) => {
                     warn!(error = %e, "BLE 5 extended advertising unavailable, falling back to legacy");
-                    let h = handle
-                        .adapter
-                        .advertise(make_adv(None))
-                        .await
-                        .map_err(|e| BlewError::Peripheral {
-                            source: Box::new(e),
-                        })?;
+                    // A legacy advertisement holds 31 bytes, which a 128-bit
+                    // service UUID and service data together overflow. The
+                    // service UUIDs are what most centrals look for, so they stay.
+                    let with_data = match handle.adapter.advertise(make_adv(None, true)).await {
+                        Ok(h) => Some(h),
+                        Err(e) if !config.service_data.is_empty() => {
+                            warn!(error = %e, "legacy advertisement rejected, retrying without service data");
+                            None
+                        }
+                        Err(e) => {
+                            return Err(BlewError::Peripheral {
+                                source: Box::new(e),
+                            });
+                        }
+                    };
+                    let h = match with_data {
+                        Some(h) => h,
+                        None => handle
+                            .adapter
+                            .advertise(make_adv(None, false))
+                            .await
+                            .map_err(|e| BlewError::Peripheral {
+                                source: Box::new(e),
+                            })?,
+                    };
                     debug!("advertising started (legacy)");
                     h
                 }

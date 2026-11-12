@@ -994,6 +994,7 @@ mod tests {
             .start_advertising(&AdvertisingConfig {
                 local_name: LocalName::Temporary("test".into()),
                 service_uuids: vec![svc_uuid],
+                ..Default::default()
             })
             .await
             .unwrap();
@@ -1054,6 +1055,7 @@ mod tests {
             .start_advertising(&AdvertisingConfig {
                 local_name: LocalName::AllowPermanent("lent".into()),
                 service_uuids: vec![Uuid::from_u128(0x1234)],
+                ..Default::default()
             })
             .await
             .unwrap();
@@ -1085,6 +1087,7 @@ mod tests {
             .start_advertising(&AdvertisingConfig {
                 local_name: LocalName::AllowPermanent("RO3JHAAY".into()),
                 service_uuids: vec![],
+                ..Default::default()
             })
             .await
             .unwrap();
@@ -1395,6 +1398,7 @@ mod tests {
         let config = AdvertisingConfig {
             local_name: LocalName::Temporary("test".into()),
             service_uuids: vec![],
+            ..Default::default()
         };
 
         peripheral.start_advertising(&config).await.unwrap();
@@ -1918,6 +1922,7 @@ mod tests {
         let config = AdvertisingConfig {
             local_name: LocalName::Temporary("test".into()),
             service_uuids: vec![],
+            ..Default::default()
         };
 
         peripheral.start_advertising(&config).await.unwrap();

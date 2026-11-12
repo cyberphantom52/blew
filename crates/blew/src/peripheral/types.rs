@@ -260,6 +260,18 @@ pub struct AdvertisingConfig {
     /// Name to advertise, and how long it may last. See [`LocalName`].
     pub local_name: LocalName,
     pub service_uuids: Vec<Uuid>,
+    /// Service data to advertise, as `(service UUID, data)` pairs.
+    ///
+    /// A central reads it back from [`BleDevice::service_data`](crate::BleDevice).
+    /// Unlike the service UUID list, BlueZ keeps reporting it for a device it
+    /// is already connected to over classic Bluetooth.
+    ///
+    /// Android sends it in the scan response, which holds 31 bytes; a 128-bit
+    /// UUID takes 18 of them before any data. BlueZ rejects an entry with no
+    /// data bytes, and on an adapter without extended advertising it is left
+    /// out when it does not fit. Apple cannot advertise service data and
+    /// leaves it out.
+    pub service_data: Vec<(Uuid, Vec<u8>)>,
 }
 
 /// Name to advertise, and how long its effects may last.
