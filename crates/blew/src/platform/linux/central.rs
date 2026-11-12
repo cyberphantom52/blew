@@ -526,8 +526,14 @@ impl CentralBackend for LinuxCentral {
             // Session and re-sends it on every StartDiscovery, so skipping this
             // would silently reuse the previous scan's UUID list. An empty `uuids`
             // matches any device.
+            //
+            // `duplicate_data` makes BlueZ signal a device's advertised data
+            // every time it hears it. Without it a device whose advertisement
+            // does not change is reported once and never again, so a caller
+            // cannot tell that a device it gave up on is still in range.
             let df = bluer::DiscoveryFilter {
                 uuids: filter.services.into_iter().collect(),
+                duplicate_data: true,
                 ..Default::default()
             };
             handle
